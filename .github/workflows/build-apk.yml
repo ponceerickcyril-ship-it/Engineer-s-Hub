@@ -36,12 +36,10 @@ jobs:
 
         # Ensure index.html exists in www
         if [ ! -f www/index.html ]; then
-          # Find any .html file in the repo and use it as index.html
           FOUND_HTML=$(find . -name "*.html" -not -path "./www/*" -not -path "./node_modules/*" | head -n 1)
           if [ -n "$FOUND_HTML" ]; then
             cp "$FOUND_HTML" www/index.html
           else
-            # Fallback index.html if no HTML file is present
             echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>App</title></head><body><h1>App Loaded</h1></body></html>' > www/index.html
           fi
         fi
@@ -51,11 +49,11 @@ jobs:
         npx cap add android
         npx cap sync android
 
-    - name: Set up JDK 17
+    - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '21'
 
     - name: Build Android APK
       run: |
