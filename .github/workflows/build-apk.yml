@@ -20,7 +20,7 @@ jobs:
 
     - name: Setup Web Directory & Capacitor
       run: |
-        # Create a package.json if missing
+        # Create package.json if missing
         if [ ! -f package.json ]; then
           npm init -y
         fi
@@ -28,9 +28,23 @@ jobs:
         # Install Capacitor
         npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
 
-        # Move web assets into a standard 'www' directory
+        # Create output www folder
         mkdir -p www
-        find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" \) -exec cp {} www/ \;
+
+        # Copy all contents from repo to www
+        cp -R ./* www/ 2>/dev/null || true
+
+        # Ensure index.html exists in www
+        if [ ! -f www/index.html ]; then
+          # Find any .html file in the repo and use it as index.html
+          FOUND_HTML=$(find . -name "*.html" -not -path "./www/*" -not -path "./node_modules/*" | head -n 1)
+          if [ -n "$FOUND_HTML" ]; then
+            cp "$FOUND_HTML" www/index.html
+          else
+            # Fallback index.html if no HTML file is present
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>App</title></head><body><h1>App Loaded</h1></body></html>' > www/index.html
+          fi
+        fi
 
         # Initialize Capacitor pointing to 'www'
         npx cap init "Engineer's Hub" "com.engineershub.app" --web-dir www
