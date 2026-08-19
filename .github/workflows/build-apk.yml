@@ -25,8 +25,8 @@ jobs:
           npm init -y
         fi
 
-        # Install Capacitor
-        npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+        # Install latest Capacitor packages
+        npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
         # Create output www folder
         mkdir -p www
@@ -55,9 +55,27 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: Build Android APK
+    - name: Fix Kotlin Duplicate Class Conflicts & Build APK
       run: |
         cd android
+
+        # Inject resolution strategy flags into gradle.properties
+        echo "android.enableJetifier=true" >> gradle.properties
+        echo "android.useAndroidX=true" >> gradle.properties
+
+        # Force Gradle to substitute legacy jdk7/jdk8 libraries with the main stdlib
+        cat << 'EOF' >> build.gradle
+        subprojects {
+            configurations.all {
+                resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                    if (details.requested.group == 'org.jetbrains.kotlin' && details.requested.name.startsWith('kotlin-stdlib-jdk')) {
+                        details.useTarget("org.jetbrains.kotlin:kotlin-stdlib:${details.requested.version}")
+                    }
+                }
+            }
+        }
+        EOF
+
         chmod +x gradlew
         ./gradlew assembleDebug
 
