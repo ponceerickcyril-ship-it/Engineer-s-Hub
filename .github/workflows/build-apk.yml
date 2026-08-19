@@ -1,4 +1,4 @@
-name: Build Android APK from Web App
+name: Build Android APK from HTML/JS App
 
 on:
   push:
@@ -18,17 +18,22 @@ jobs:
       with:
         node-version: 20
 
-    - name: Install Dependencies
+    - name: Setup Web Directory & Capacitor
       run: |
-        npm install
-        npm install @capacitor/core @capacitor/cli @capacitor/android
+        # Create a package.json if missing
+        if [ ! -f package.json ]; then
+          npm init -y
+        fi
 
-    - name: Build Web App
-      run: npm run build
+        # Install Capacitor
+        npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
 
-    - name: Initialize Capacitor & Add Android
-      run: |
-        npx cap init "My AI App" "com.aistudio.app" --web-dir dist
+        # Move web assets into a standard 'www' directory
+        mkdir -p www
+        find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" \) -exec cp {} www/ \;
+
+        # Initialize Capacitor pointing to 'www'
+        npx cap init "Engineer's Hub" "com.engineershub.app" --web-dir www
         npx cap add android
         npx cap sync android
 
