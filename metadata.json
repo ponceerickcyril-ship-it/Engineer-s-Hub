@@ -1,0 +1,6 @@
+{
+  "name": "Engineering Hub",
+  "description": "Comprehensive, interactive engineering learning and utility platform with concepts, calculators, formulas, materials database, diagrams, unit converters, real-world systems, and quizzes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
