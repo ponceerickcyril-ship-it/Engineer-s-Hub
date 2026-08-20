@@ -26,51 +26,55 @@ jobs:
 
         npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
-        # Install project dependencies and build web assets if available
-        npm install --legacy-peer-deps || true
-        npm run build --if-present || true
-
         mkdir -p www
 
-        # Copy build output or static assets to www
-        if [ -d "dist" ]; then
-          cp -R dist/* www/
-        elif [ -d "build" ]; then
-          cp -R build/* www/
-        else
-          node -e '
-            const fs = require("fs");
-            const path = require("path");
-            const www = path.join(process.cwd(), "www");
-            const ignore = [".git", ".github", "node_modules", "android", "www"];
-            fs.readdirSync(".").forEach(f => {
-              if (!ignore.includes(f)) fs.cpSync(f, path.join(www, f), { recursive: true });
-            });
-          '
-        fi
-
-        # Fix relative paths in www to prevent white screen issues on Android
+        # Copy static files safely into www
         node -e '
           const fs = require("fs");
           const path = require("path");
           const www = path.join(process.cwd(), "www");
+          const ignore = [".git", ".github", "node_modules", "android", "www"];
+          
+          fs.readdirSync(".").forEach(f => {
+            if (!ignore.includes(f)) {
+              fs.cpSync(f, path.join(www, f), { recursive: true });
+            }
+          });
 
+          // Ensure index.html exists inside www
+          const indexPath = path.join(www, "index.html");
+          if (!fs.existsSync(indexPath)) {
+            const findHtml = (dir) => {
+              for (const file of fs.readdirSync(dir)) {
+                const full = path.join(dir, file);
+                if (fs.statSync(full).isDirectory()) {
+                  const res = findHtml(full);
+                  if (res) return res;
+                } else if (file.endsWith(".html")) {
+                  return full;
+                }
+              }
+              return null;
+            };
+            const found = findHtml(www);
+            if (found) fs.copyFileSync(found, indexPath);
+          }
+
+          // Patch absolute assets paths to relative paths to fix white screen issue
           function fixPaths(dir) {
             fs.readdirSync(dir).forEach(file => {
-              const fullPath = path.join(dir, file);
-              if (fs.statSync(fullPath).isDirectory()) {
-                fixPaths(fullPath);
+              const full = path.join(dir, file);
+              if (fs.statSync(full).isDirectory()) {
+                fixPaths(full);
               } else if (file.endsWith(".html") || file.endsWith(".js") || file.endsWith(".css")) {
-                let content = fs.readFileSync(fullPath, "utf8");
-                content = content.replace(/src="\/assets\//g, "src=\"./assets/");
-                content = content.replace(/href="\/assets\//g, "href=\"./assets/");
-                content = content.replace(/src="\//g, "src=\"./");
-                content = content.replace(/href="\//g, "href=\"./");
-                fs.writeFileSync(fullPath, content);
+                let content = fs.readFileSync(full, "utf8");
+                content = content.replaceAll("=\"/assets/", "=\"./assets/");
+                content = content.replaceAll("=\"/", "=\"./");
+                fs.writeFileSync(full, content);
               }
             });
           }
-          if (fs.existsSync(www)) fixPaths(www);
+          fixPaths(www);
         '
 
         # Initialize and sync Capacitor
