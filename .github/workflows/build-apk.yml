@@ -1,4 +1,4 @@
-name: Build Android APK from HTML/JS App
+name: Build Android APK from Google AI Studio App
 
 on:
   push:
@@ -13,47 +13,29 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Node.js
+    - name: Set up Node.js 22
       uses: actions/setup-node@v4
       with:
         node-version: 22
 
-    - name: Setup Web Directory & Capacitor
+    - name: Build Google AI Studio React App & Setup Capacitor
       run: |
-        # 1. Initialize package.json if missing
-        if [ ! -f package.json ]; then
-          npm init -y
-        fi
+        # 1. Install project dependencies
+        npm install --legacy-peer-deps
 
-        # 2. Install Capacitor packages
+        # 2. Add Capacitor dependencies
         npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
-        # 3. Create clean www directory
+        # 3. Build Vite project with relative base path (fixes white screen)
+        npx vite build --base ./
+
+        # 4. Verify 'dist' folder exists and copy to 'www'
         mkdir -p www
-
-        # 4. Copy all files except hidden and environment folders
-        cp -R index.html *.js *.css *.png *.svg *.json www/ 2>/dev/null || true
-        cp -R src www/ 2>/dev/null || true
-        cp -R public/* www/ 2>/dev/null || true
-        cp -R dist/* www/ 2>/dev/null || true
-        cp -R build/* www/ 2>/dev/null || true
-
-        # 5. Ensure index.html exists inside www
-        if [ ! -f www/index.html ]; then
-          FIRST_HTML=$(find . -maxdepth 3 -name "*.html" -not -path "./www/*" -not -path "./node_modules/*" | head -n 1)
-          if [ -n "$FIRST_HTML" ]; then
-            cp "$FIRST_HTML" www/index.html
-          else
-            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>App</title></head><body><div id="root"></div></body></html>' > www/index.html
-          fi
+        if [ -d "dist" ]; then
+          cp -R dist/* www/
         fi
 
-        # 6. Convert absolute paths to relative paths (fixes blank/white screen on mobile)
-        sed -i 's/href="\//href=".\//g' www/index.html 2>/dev/null || true
-        sed -i 's/src="\//src=".\//g' www/index.html 2>/dev/null || true
-        sed -i 's/\/assets\//.\/assets\//g' www/index.html 2>/dev/null || true
-
-        # 7. Initialize Capacitor
+        # 5. Initialize & Sync Capacitor pointing to compiled dist assets
         npx cap init "Engineer's Hub" "com.engineershub.app" --web-dir www
         npx cap add android
         npx cap sync android
