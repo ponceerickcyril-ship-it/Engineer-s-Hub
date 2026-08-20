@@ -28,26 +28,18 @@ jobs:
         # Install Capacitor packages
         npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
-        # Create output www folder
+        # Create www directory
         mkdir -p www
 
-        # Locate the real index.html or primary HTML file anywhere in the repo (ignoring node_modules/android)
-        TARGET_HTML=$(find . -name "*.html" -not -path "*/node_modules/*" -not -path "*/android/*" -not -path "*/www/*" | head -n 1)
+        # Copy everything except system/git folders into www
+        rsync -av --exclude='.git' --exclude='.github' --exclude='node_modules' --exclude='android' --exclude='www' ./ www/
 
-        if [ -n "$TARGET_HTML" ]; then
-          # Find the folder containing that HTML file and copy everything from it into www
-          SOURCE_DIR=$(dirname "$TARGET_HTML")
-          echo "Found source web folder at: $SOURCE_DIR"
-          cp -R "$SOURCE_DIR"/* www/
-          
-          # Rename the main HTML file to index.html if it had a different name
-          HTML_NAME=$(basename "$TARGET_HTML")
-          if [ "$HTML_NAME" != "index.html" ]; then
-            cp "www/$HTML_NAME" www/index.html
+        # Ensure index.html exists inside www (find any html file copied to www)
+        if [ ! -f www/index.html ]; then
+          ANY_HTML=$(find www -type f -name "*.html" | head -n 1)
+          if [ -n "$ANY_HTML" ]; then
+            cp "$ANY_HTML" www/index.html
           fi
-        else
-          echo "Error: No HTML file found in repository!"
-          exit 1
         fi
 
         # Initialize Capacitor pointing to 'www'
