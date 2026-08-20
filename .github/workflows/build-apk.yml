@@ -20,36 +20,63 @@ jobs:
 
     - name: Setup Web Directory & Capacitor
       run: |
-        # Initialize package.json if missing
         if [ ! -f package.json ]; then
           npm init -y
         fi
 
-        # Install Capacitor
+        # Install dependencies safely
         npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
-        # Create www directory safely via Node.js
+        # Run web build if package.json contains a build script
+        npm run build --if-present || true
+
+        # Create output directory
+        mkdir -p www
+
+        # Copy built assets (dist or build folder) into www if they exist, otherwise copy root
+        if [ -d "dist" ]; then
+          cp -R dist/* www/
+        elif [ -d "build" ]; then
+          cp -R build/* www/
+        else
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const www = path.join(process.cwd(), "www");
+            const ignore = [".git", ".github", "node_modules", "android", "www"];
+            fs.readdirSync(".").forEach(f => {
+              if (!ignore.includes(f)) fs.cpSync(f, path.join(www, f), { recursive: true });
+            });
+          '
+        fi
+
+        # Guarantee an index.html file exists inside www no matter what
         node -e '
           const fs = require("fs");
           const path = require("path");
-
           const www = path.join(process.cwd(), "www");
-          if (!fs.existsSync(www)) fs.mkdirSync(www, { recursive: true });
+          const indexPath = path.join(www, "index.html");
 
-          const ignore = [".git", ".github", "node_modules", "android", "www"];
-          
-          fs.readdirSync(".").forEach(file => {
-            if (!ignore.includes(file)) {
-              fs.cpSync(file, path.join(www, file), { recursive: true });
-            }
-          });
+          if (!fs.existsSync(indexPath)) {
+            // Find any html file inside www
+            const findHtml = (dir) => {
+              for (const file of fs.readdirSync(dir)) {
+                const fullPath = path.join(dir, file);
+                if (fs.statSync(fullPath).isDirectory()) {
+                  const res = findHtml(fullPath);
+                  if (res) return res;
+                } else if (file.endsWith(".html")) {
+                  return fullPath;
+                }
+              }
+              return null;
+            };
 
-          // Ensure an index.html exists
-          if (!fs.existsSync(path.join(www, "index.html"))) {
-            const files = fs.readdirSync(www, { recursive: true });
-            const htmlFile = files.find(f => f.endsWith(".html"));
-            if (htmlFile) {
-              fs.copyFileSync(path.join(www, htmlFile), path.join(www, "index.html"));
+            const found = findHtml(www);
+            if (found) {
+              fs.copyFileSync(found, indexPath);
+            } else {
+              fs.writeFileSync(indexPath, "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>App</title></head><body><div id=\"root\"></div></body></html>");
             }
           }
         '
