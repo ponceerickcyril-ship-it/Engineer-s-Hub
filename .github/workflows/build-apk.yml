@@ -20,29 +20,41 @@ jobs:
 
     - name: Setup Web Directory & Capacitor
       run: |
-        # Create package.json if missing
+        # Initialize package.json if missing
         if [ ! -f package.json ]; then
           npm init -y
         fi
 
-        # Install Capacitor packages
+        # Install Capacitor
         npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
-        # Create www directory
-        mkdir -p www
+        # Create www directory safely via Node.js
+        node -e '
+          const fs = require("fs");
+          const path = require("path");
 
-        # Copy everything except system/git folders into www
-        rsync -av --exclude='.git' --exclude='.github' --exclude='node_modules' --exclude='android' --exclude='www' ./ www/
+          const www = path.join(process.cwd(), "www");
+          if (!fs.existsSync(www)) fs.mkdirSync(www, { recursive: true });
 
-        # Ensure index.html exists inside www (find any html file copied to www)
-        if [ ! -f www/index.html ]; then
-          ANY_HTML=$(find www -type f -name "*.html" | head -n 1)
-          if [ -n "$ANY_HTML" ]; then
-            cp "$ANY_HTML" www/index.html
-          fi
-        fi
+          const ignore = [".git", ".github", "node_modules", "android", "www"];
+          
+          fs.readdirSync(".").forEach(file => {
+            if (!ignore.includes(file)) {
+              fs.cpSync(file, path.join(www, file), { recursive: true });
+            }
+          });
 
-        # Initialize Capacitor pointing to 'www'
+          // Ensure an index.html exists
+          if (!fs.existsSync(path.join(www, "index.html"))) {
+            const files = fs.readdirSync(www, { recursive: true });
+            const htmlFile = files.find(f => f.endsWith(".html"));
+            if (htmlFile) {
+              fs.copyFileSync(path.join(www, htmlFile), path.join(www, "index.html"));
+            }
+          }
+        '
+
+        # Initialize and sync Capacitor
         npx cap init "Engineer's Hub" "com.engineershub.app" --web-dir www
         npx cap add android
         npx cap sync android
@@ -53,7 +65,7 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: Fix Kotlin Duplicate Class Conflicts & Build APK
+    - name: Fix Kotlin Conflicts & Build APK
       run: |
         cd android
 
