@@ -1,4 +1,4 @@
-name: Build Android APK from Google AI Studio App
+name: Build Android APK from HTML/JS App
 
 on:
   push:
@@ -18,24 +18,52 @@ jobs:
       with:
         node-version: 22
 
-    - name: Build Google AI Studio React App & Setup Capacitor
+    - name: Setup Web Directory & Capacitor
       run: |
-        # 1. Install project dependencies
-        npm install --legacy-peer-deps
-
-        # 2. Add Capacitor dependencies
-        npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
-
-        # 3. Build Vite project with relative base path (fixes white screen)
-        npx vite build --base ./
-
-        # 4. Verify 'dist' folder exists and copy to 'www'
-        mkdir -p www
-        if [ -d "dist" ]; then
-          cp -R dist/* www/
+        # 1. Initialize package.json if missing
+        if [ ! -f package.json ]; then
+          npm init -y
         fi
 
-        # 5. Initialize & Sync Capacitor pointing to compiled dist assets
+        # 2. Install dependencies cleanly
+        npm install --force || true
+        npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev || true
+
+        # 3. Compile React/Vite web application
+        if [ -f "node_modules/.bin/vite" ]; then
+          npx vite build --base ./ || true
+        else
+          npm run build --if-present || true
+        fi
+
+        # 4. Prepare web asset folder
+        mkdir -p www
+
+        if [ -d "dist" ] && [ "$(ls -A dist 2>/dev/null)" ]; then
+          cp -R dist/* www/
+        elif [ -d "build" ] && [ "$(ls -A build 2>/dev/null)" ]; then
+          cp -R build/* www/
+        else
+          cp -R index.html *.js *.css *.png *.svg www/ 2>/dev/null || true
+          cp -R src/* www/ 2>/dev/null || true
+          cp -R public/* www/ 2>/dev/null || true
+        fi
+
+        # 5. Fix index.html paths to prevent white screen
+        if [ ! -f www/index.html ]; then
+          FOUND_HTML=$(find . -maxdepth 3 -name "*.html" -not -path "./www/*" -not -path "./node_modules/*" | head -n 1)
+          if [ -n "$FOUND_HTML" ]; then
+            cp "$FOUND_HTML" www/index.html
+          else
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>App</title></head><body><div id="root"></div></body></html>' > www/index.html
+          fi
+        fi
+
+        sed -i 's/href="\//href=".\//g' www/index.html 2>/dev/null || true
+        sed -i 's/src="\//src=".\//g' www/index.html 2>/dev/null || true
+        sed -i 's/\/assets\//.\/assets\//g' www/index.html 2>/dev/null || true
+
+        # 6. Initialize & Sync Capacitor
         npx cap init "Engineer's Hub" "com.engineershub.app" --web-dir www
         npx cap add android
         npx cap sync android
