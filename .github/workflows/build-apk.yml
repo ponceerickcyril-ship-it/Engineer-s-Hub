@@ -24,16 +24,15 @@ jobs:
           npm init -y
         fi
 
-        # Install dependencies safely
         npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
-        # Run web build if package.json contains a build script
+        # Install project dependencies and build web assets if available
+        npm install --legacy-peer-deps || true
         npm run build --if-present || true
 
-        # Create output directory
         mkdir -p www
 
-        # Copy built assets (dist or build folder) into www if they exist, otherwise copy root
+        # Copy build output or static assets to www
         if [ -d "dist" ]; then
           cp -R dist/* www/
         elif [ -d "build" ]; then
@@ -50,35 +49,28 @@ jobs:
           '
         fi
 
-        # Guarantee an index.html file exists inside www no matter what
+        # Fix relative paths in www to prevent white screen issues on Android
         node -e '
           const fs = require("fs");
           const path = require("path");
           const www = path.join(process.cwd(), "www");
-          const indexPath = path.join(www, "index.html");
 
-          if (!fs.existsSync(indexPath)) {
-            // Find any html file inside www
-            const findHtml = (dir) => {
-              for (const file of fs.readdirSync(dir)) {
-                const fullPath = path.join(dir, file);
-                if (fs.statSync(fullPath).isDirectory()) {
-                  const res = findHtml(fullPath);
-                  if (res) return res;
-                } else if (file.endsWith(".html")) {
-                  return fullPath;
-                }
+          function fixPaths(dir) {
+            fs.readdirSync(dir).forEach(file => {
+              const fullPath = path.join(dir, file);
+              if (fs.statSync(fullPath).isDirectory()) {
+                fixPaths(fullPath);
+              } else if (file.endsWith(".html") || file.endsWith(".js") || file.endsWith(".css")) {
+                let content = fs.readFileSync(fullPath, "utf8");
+                content = content.replace(/src="\/assets\//g, "src=\"./assets/");
+                content = content.replace(/href="\/assets\//g, "href=\"./assets/");
+                content = content.replace(/src="\//g, "src=\"./");
+                content = content.replace(/href="\//g, "href=\"./");
+                fs.writeFileSync(fullPath, content);
               }
-              return null;
-            };
-
-            const found = findHtml(www);
-            if (found) {
-              fs.copyFileSync(found, indexPath);
-            } else {
-              fs.writeFileSync(indexPath, "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>App</title></head><body><div id=\"root\"></div></body></html>");
-            }
+            });
           }
+          if (fs.existsSync(www)) fixPaths(www);
         '
 
         # Initialize and sync Capacitor
