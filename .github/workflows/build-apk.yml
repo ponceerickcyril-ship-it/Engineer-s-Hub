@@ -31,17 +31,23 @@ jobs:
         # Create output www folder
         mkdir -p www
 
-        # Copy all contents from repo to www
-        cp -R ./* www/ 2>/dev/null || true
+        # Locate the real index.html or primary HTML file anywhere in the repo (ignoring node_modules/android)
+        TARGET_HTML=$(find . -name "*.html" -not -path "*/node_modules/*" -not -path "*/android/*" -not -path "*/www/*" | head -n 1)
 
-        # Ensure index.html exists in www
-        if [ ! -f www/index.html ]; then
-          FOUND_HTML=$(find . -name "*.html" -not -path "./www/*" -not -path "./node_modules/*" | head -n 1)
-          if [ -n "$FOUND_HTML" ]; then
-            cp "$FOUND_HTML" www/index.html
-          else
-            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>App</title></head><body><h1>App Loaded</h1></body></html>' > www/index.html
+        if [ -n "$TARGET_HTML" ]; then
+          # Find the folder containing that HTML file and copy everything from it into www
+          SOURCE_DIR=$(dirname "$TARGET_HTML")
+          echo "Found source web folder at: $SOURCE_DIR"
+          cp -R "$SOURCE_DIR"/* www/
+          
+          # Rename the main HTML file to index.html if it had a different name
+          HTML_NAME=$(basename "$TARGET_HTML")
+          if [ "$HTML_NAME" != "index.html" ]; then
+            cp "www/$HTML_NAME" www/index.html
           fi
+        else
+          echo "Error: No HTML file found in repository!"
+          exit 1
         fi
 
         # Initialize Capacitor pointing to 'www'
@@ -59,11 +65,9 @@ jobs:
       run: |
         cd android
 
-        # Inject resolution strategy flags into gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
         echo "android.useAndroidX=true" >> gradle.properties
 
-        # Force Gradle to substitute legacy jdk7/jdk8 libraries with the main stdlib
         cat << 'EOF' >> build.gradle
         subprojects {
             configurations.all {
@@ -83,4 +87,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: app-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: '**/*.apk'
