@@ -19,24 +19,17 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-
-    - name: Generate Wrapper and Build APK
+    - name: Install Gradle & Build
       run: |
-        # 1. Force install Gradle 8.7
-        sudo wget https://services.gradle.org/distributions/gradle-8.7-bin.zip -P /tmp
-        sudo unzip -d /opt/gradle /tmp/gradle-8.7-bin.zip
-        export PATH=/opt/gradle/gradle-8.7/bin:$PATH
+        # Download working Gradle version directly
+        wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+        unzip -q gradle-8.7-bin.zip
+        export PATH=$PWD/gradle-8.7/bin:$PATH
 
-        # 2. Generate missing gradlew binary
+        # Generate wrapper silently and build
         gradle wrapper --gradle-version 8.7
-
-        # 3. Give execution permissions
         chmod +x gradlew
-
-        # 4. Compile the native Android APK
-        ./gradlew assembleDebug --no-daemon
+        ./gradlew assembleDebug --stacktrace --info
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
