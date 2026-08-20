@@ -13,71 +13,47 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Node.js 22
+    - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: 22
 
     - name: Setup Web Directory & Capacitor
       run: |
+        # 1. Initialize package.json if missing
         if [ ! -f package.json ]; then
           npm init -y
         fi
 
+        # 2. Install Capacitor packages
         npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --save-dev
 
+        # 3. Create clean www directory
         mkdir -p www
 
-        # Copy static files safely into www
-        node -e '
-          const fs = require("fs");
-          const path = require("path");
-          const www = path.join(process.cwd(), "www");
-          const ignore = [".git", ".github", "node_modules", "android", "www"];
-          
-          fs.readdirSync(".").forEach(f => {
-            if (!ignore.includes(f)) {
-              fs.cpSync(f, path.join(www, f), { recursive: true });
-            }
-          });
+        # 4. Copy all files except hidden and environment folders
+        cp -R index.html *.js *.css *.png *.svg *.json www/ 2>/dev/null || true
+        cp -R src www/ 2>/dev/null || true
+        cp -R public/* www/ 2>/dev/null || true
+        cp -R dist/* www/ 2>/dev/null || true
+        cp -R build/* www/ 2>/dev/null || true
 
-          // Ensure index.html exists inside www
-          const indexPath = path.join(www, "index.html");
-          if (!fs.existsSync(indexPath)) {
-            const findHtml = (dir) => {
-              for (const file of fs.readdirSync(dir)) {
-                const full = path.join(dir, file);
-                if (fs.statSync(full).isDirectory()) {
-                  const res = findHtml(full);
-                  if (res) return res;
-                } else if (file.endsWith(".html")) {
-                  return full;
-                }
-              }
-              return null;
-            };
-            const found = findHtml(www);
-            if (found) fs.copyFileSync(found, indexPath);
-          }
+        # 5. Ensure index.html exists inside www
+        if [ ! -f www/index.html ]; then
+          FIRST_HTML=$(find . -maxdepth 3 -name "*.html" -not -path "./www/*" -not -path "./node_modules/*" | head -n 1)
+          if [ -n "$FIRST_HTML" ]; then
+            cp "$FIRST_HTML" www/index.html
+          else
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>App</title></head><body><div id="root"></div></body></html>' > www/index.html
+          fi
+        fi
 
-          // Patch absolute assets paths to relative paths to fix white screen issue
-          function fixPaths(dir) {
-            fs.readdirSync(dir).forEach(file => {
-              const full = path.join(dir, file);
-              if (fs.statSync(full).isDirectory()) {
-                fixPaths(full);
-              } else if (file.endsWith(".html") || file.endsWith(".js") || file.endsWith(".css")) {
-                let content = fs.readFileSync(full, "utf8");
-                content = content.replaceAll("=\"/assets/", "=\"./assets/");
-                content = content.replaceAll("=\"/", "=\"./");
-                fs.writeFileSync(full, content);
-              }
-            });
-          }
-          fixPaths(www);
-        '
+        # 6. Convert absolute paths to relative paths (fixes blank/white screen on mobile)
+        sed -i 's/href="\//href=".\//g' www/index.html 2>/dev/null || true
+        sed -i 's/src="\//src=".\//g' www/index.html 2>/dev/null || true
+        sed -i 's/\/assets\//.\/assets\//g' www/index.html 2>/dev/null || true
 
-        # Initialize and sync Capacitor
+        # 7. Initialize Capacitor
         npx cap init "Engineer's Hub" "com.engineershub.app" --web-dir www
         npx cap add android
         npx cap sync android
