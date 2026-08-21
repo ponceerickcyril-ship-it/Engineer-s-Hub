@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Native Android APK
 
 on:
   push:
@@ -22,19 +22,28 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Gradle
+      - name: Install Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
 
-      - name: Make Gradle executable
-        run: chmod +x ./gradlew
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 9.3.1
+
+      - name: Make Gradle Wrapper executable
+        run: chmod +x gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Find APK
+        run: |
+          echo "Searching for APK files..."
+          find . -type f -name "*.apk" -print
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk
-          path: |
-            app/build/outputs/apk/debug/*.apk
+          name: engineering-hub-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
